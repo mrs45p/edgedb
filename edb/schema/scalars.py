@@ -152,11 +152,13 @@ class ScalarTypeCommandContext(sd.ObjectCommandContext,
     pass
 
 
-class ScalarTypeCommand(constraints.ConsistencySubjectCommand,
-                        s_anno.AnnotationSubjectCommand,
-                        s_types.TypeCommand,
-                        schema_metaclass=ScalarType,
-                        context_class=ScalarTypeCommandContext):
+class ScalarTypeCommand(
+    s_types.InheritingTypeCommand,
+    constraints.ConsistencySubjectCommand,
+    s_anno.AnnotationSubjectCommand,
+    schema_metaclass=ScalarType,
+    context_class=ScalarTypeCommandContext,
+):
     @classmethod
     def _cmd_tree_from_ast(cls, schema, astnode, context):
         cmd = super()._cmd_tree_from_ast(schema, astnode, context)
