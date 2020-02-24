@@ -2176,12 +2176,45 @@ class AlterObjectProperty(Command):
         parent_cls = parent_op.get_schema_metaclass()
         has_shadow = parent_cls.get_field(f'orig_{field.name}') is not None
 
-        if context.descriptive_mode:
-            # When generating AST for DESCRIBE AS TEXT, we want
-            # to use the original user-specified and unmangled
-            # expression to render the object definition.
-            expr_ql = edgeql.parse_fragment(self.new_value.origtext)
-        else:
+        expr_ql = None
+        if context.descriptive_mode or context.declarative:
+            # Potentially we want to use the original expression
+            # instead of the normalized one, but this can only be done
+            # safely if the normalized form has sets the same module
+            # as the one that hosts the object we're in.
+            #
+            # We also make a special exception for indexes which
+            # should always have a valid original expression since
+            # they cannot use functions.
+            #
+            # When generating AST for DESCRIBE AS TEXT or AS SDL, we
+            # want to use the original user-specified and unmangled
+            # expression to render the object definition whenever
+            # possible.
+
+            if isinstance(self.new_value.qlast, qlast.SelectQuery):
+                aliases = self.new_value.qlast.aliases
+                # now need to make sure this looks like normalized form
+                num_aliases = len(aliases)
+
+                if (num_aliases == 0 or
+                    # No aliases at all or a single module alias are
+                    # both indicators that we might be able to use
+                    # orig_expr.
+                    (num_aliases == 1
+                        and isinstance(aliases[0], qlast.ModuleAliasDecl)
+                        # and that the module matches
+                        and aliases[0].module == parent_op.classname.module)):
+
+                    expr_ql = edgeql.parse_fragment(self.new_value.origtext)
+
+            else:
+                # If the expression isn't even wrapped in a SEELCT,
+                # chances are it's not normalized in the first place,
+                # so use it.
+                expr_ql = self.new_value.qlast
+
+        if expr_ql is None:
             # In all other DESCRIBE modes we want the original expression
             # to be there as a 'SET orig_<expr> := ...' command.
             # The mangled expression should be the main expression that
