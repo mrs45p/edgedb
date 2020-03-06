@@ -279,7 +279,7 @@ class develop(setuptools_develop.develop):
 
     def run(self, *args, **kwargs):
         scripts = self.distribution.entry_points['console_scripts']
-        patched_scripts = [s + '_dev' for s in scripts]
+        patched_scripts = [s + '_dev' if isinstance(s, str) else s for s in scripts]
         patched_scripts.append('edb = edb.tools.edb:edbcommands')
         self.distribution.entry_points['console_scripts'] = patched_scripts
 
@@ -434,6 +434,11 @@ class build_ext(distutils_build_ext.build_ext):
                 for ext in self.distribution.rust_extensions:
                     # Always build in-place because later stages of the build
                     # may depend on the modules having been built
+
+                    # but only for .so files
+                    if ext.binding == setuptools_rust.Binding.Exec:
+                        continue
+
                     dylib_path = pathlib.Path(
                         build_ext.get_ext_fullpath(ext.name))
                     build_ext.inplace = True
@@ -468,6 +473,11 @@ if setuptools_rust is not None:
             "edb._edgeql_rust",
             path="edgedb-rust/edgeql-python/Cargo.toml",
             binding=setuptools_rust.Binding.RustCPython),
+        setuptools_rust.RustExtension(
+            {"edgedb": "edb.edgedb"},
+            script=True,
+            path="edgedb-rust/edgedb-repl/Cargo.toml",
+            binding=setuptools_rust.Binding.Exec),
     ]
 else:
     rust_extensions = []
@@ -491,7 +501,7 @@ setuptools.setup(
     },
     entry_points={
         'console_scripts': [
-            'edgedb = edb.cli:cli',
+            'edgedb-old = edb.cli:cli',
             'edgedb-server = edb.server.main:main',
         ]
     },
